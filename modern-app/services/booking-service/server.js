@@ -5,30 +5,31 @@ const cors = require('cors');
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(cors());
 
-// 1. Connect to MongoDB
-mongoose.connect('mongodb://localhost:27017/hotel_db')
-  .then(() => console.log("Booking Service: Connected to MongoDB Database"));
+mongoose.connect("mongodb://127.0.0.1:27017/modern_hotel");
 
-// 2. Define Schema with the new text field
-const bookingSchema = new mongoose.Schema({
-  customer_name: String,
-  room_type: String,
-  check_in: Date,
-  check_out: Date,
-  special_requests: String // <-- Schema updated to accept text notes
+app.post("/bookings", async (req, res) => {
+  const { customer_name, rooms, check_in, check_out } = req.body;
+
+  // ✅ Calculate total revenue
+  const totalPrice = rooms.reduce((sum, r) => sum + (r.price || 0), 0);
+
+  const booking = new Booking({
+    customer_name,
+    rooms,
+    check_in,
+    check_out,
+    totalPrice
+  });
+
+  await booking.save();
+  res.json(booking);
 });
-const Booking = mongoose.model('Booking', bookingSchema);
 
-// 3. Create the API Route to serve data to the React frontend
-app.get('/bookings', async (req, res) => {
-  try {
-    const bookings = await Booking.find();
-    res.json(bookings);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error fetching bookings" });
-  }
+app.get("/bookings", async (req, res) => {
+  const data = await Booking.find();
+  res.json(data);
 });
 
 // 4. Start the Server on Port 6001 (as per your repository README)

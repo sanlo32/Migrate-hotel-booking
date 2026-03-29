@@ -19,7 +19,8 @@ import {
   FiHeart,
   FiInfo,
   FiX,
-  FiAlertCircle
+  FiAlertCircle,
+  FiUser,
 } from "react-icons/fi";
 import { 
   MdOutlineHotel, 
@@ -61,20 +62,29 @@ function Hotels() {
       if (Array.isArray(response.data)) {
         // Enhance the data with default values for missing fields
         const enhancedHotels = response.data.map((hotel, index) => ({
-          id: hotel.id || index + 1,
-          name: hotel.name,
-          city: hotel.city,
-          rating: hotel.rating || 4.0 + (Math.random() * 0.8), // Random rating between 4.0-4.8
-          pricePerNight: hotel.pricePerNight || Math.floor(Math.random() * (400 - 150 + 1) + 150),
-          description: hotel.description || `Experience luxury and comfort at ${hotel.name}. Perfect for business and leisure travelers in ${hotel.city}.`,
-          image: hotel.image || getHotelImage(hotel.name),
-          wifi: hotel.wifi !== undefined ? hotel.wifi : true,
-          parking: hotel.parking !== undefined ? hotel.parking : true,
-          restaurant: hotel.restaurant !== undefined ? hotel.restaurant : true,
-          pool: hotel.pool !== undefined ? hotel.pool : Math.random() > 0.3,
-          gym: hotel.gym !== undefined ? hotel.gym : Math.random() > 0.5,
-          spa: hotel.spa !== undefined ? hotel.spa : Math.random() > 0.7
-        }));
+  id: hotel.id || index + 1,
+  name: hotel.name,
+  city: hotel.city,
+  description: hotel.description,
+  image: hotel.image,
+
+  //  ADD THIS (CRITICAL FIX)
+  roomTypes: hotel.roomTypes || [
+    { type: "Single", price: 100 },
+    { type: "Double", price: 200 },
+    { type: "Suite", price: 400 }
+  ],
+
+  rating: hotel.rating || 4.5,
+  pricePerNight: hotel.pricePerNight || 200,
+
+  wifi: hotel.wifi ?? true,
+  parking: hotel.parking ?? true,
+  restaurant: hotel.restaurant ?? true,
+  pool: hotel.pool ?? true,
+  gym: hotel.gym ?? false,
+  spa: hotel.spa ?? false
+}));
         
         setHotels(enhancedHotels);
         
@@ -313,7 +323,40 @@ function Hotels() {
     setSelectedHotel(hotel);
     setShowBookingModal(true);
   };
+const handleBooking = async () => {
+  try {
+    if (!formData.customer_name || !formData.check_in || !formData.check_out) {
+      alert("Please fill all required fields");
+      return;
+    }
 
+    const roomsWithPrice = formData.rooms.map(r => {
+      const roomInfo = selectedHotel.roomTypes.find(rt => rt.type === r.room_type);
+
+      return {
+        room_type: r.room_type,
+        price: roomInfo?.price || 0,
+        guests: Number(r.guests)
+      };
+    });
+
+    const payload = {
+      customer_name: formData.customer_name,
+      rooms: roomsWithPrice,
+      check_in: formData.check_in,
+      check_out: formData.check_out
+    };
+
+    await axios.post("http://localhost:6001/bookings", payload);
+
+    alert("Booking successful!");
+
+    setShowBookingModal(false);
+  } catch (err) {
+    console.error(err);
+    alert("Booking failed");
+  }
+};
   // Clear all filters
   const clearFilters = () => {
     setSearch("");
@@ -322,6 +365,34 @@ function Hotels() {
     setSelectedRating(0);
     setCurrentPage(1);
   };
+const [formData, setFormData] = useState({
+  customer_name: "",
+  email: "",
+  phone: "",
+  check_in: "",
+  check_out: "",
+  rooms: [{ room_type: "", guests: 1 }]
+});
+
+
+
+const nights = formData.check_in && formData.check_out
+  ? Math.max(
+      1,
+      Math.ceil(
+        (new Date(formData.check_out) - new Date(formData.check_in)) /
+        (1000 * 60 * 60 * 24)
+      )
+    )
+  : 1;
+
+const total = formData.rooms.reduce((sum, room) => {
+  const roomInfo = selectedHotel?.roomTypes?.find(
+    (r) => r.type === room.room_type
+  );
+
+  return sum + ((roomInfo?.price || 0) * nights);
+}, 0);
 
   return (
     <Layout>
@@ -715,7 +786,9 @@ function Hotels() {
                   <div className="flex justify-between items-center">
                     <div>
                       <p className="text-3xl font-bold text-gray-900">
-                        ${selectedHotel.pricePerNight}
+                        ${formData.rooms[0]?.room_type
+  ? selectedHotel.roomTypes.find(r => r.type === formData.rooms[0].room_type)?.price || 0
+  : 0}
                       </p>
                       <p className="text-sm text-gray-500">per night</p>
                     </div>
@@ -737,56 +810,297 @@ function Hotels() {
       )}
 
       {/* Booking Modal */}
-      {showBookingModal && selectedHotel && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowBookingModal(false)}>
-          <div className="bg-white rounded-2xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-            <div className="border-b border-gray-200 px-6 py-4 flex justify-between items-center">
-              <h3 className="text-xl font-bold text-gray-900">Book {selectedHotel.name}</h3>
-              <button onClick={() => setShowBookingModal(false)} className="text-gray-400 hover:text-gray-600">
-                <FiX className="w-5 h-5" />
-              </button>
+{showBookingModal && selectedHotel && (
+  <div 
+    className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-all duration-300" 
+    onClick={() => setShowBookingModal(false)}
+  >
+    <div 
+      className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl transform transition-all duration-300 scale-100 animate-slideUp" 
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* Modal Header */}
+      <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4 flex justify-between items-center">
+        <div>
+          <h3 className="text-xl font-bold text-white">Complete Your Booking</h3>
+          <p className="text-blue-100 text-sm mt-1">{selectedHotel.name}</p>
+        </div>
+        <button 
+          onClick={() => setShowBookingModal(false)} 
+          className="text-white hover:bg-white/20 rounded-lg p-1 transition-colors"
+        >
+          <FiX className="w-6 h-6" />
+        </button>
+      </div>
+
+      {/* Modal Content */}
+      <div className="overflow-y-auto max-h-[calc(90vh-80px)]">
+        <div className="p-6">
+          {/* Hotel Summary Card */}
+          <div className="bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl p-4 mb-6 border border-gray-200">
+            <div className="flex gap-4">
+              <img 
+                src={selectedHotel.image} 
+                alt={selectedHotel.name}
+                className="w-20 h-20 rounded-lg object-cover shadow-md"
+              />
+              <div className="flex-1">
+                <h4 className="font-semibold text-gray-900">{selectedHotel.name}</h4>
+                <div className="flex items-center gap-1 text-sm text-gray-600 mt-1">
+                  <FiMapPin className="w-3 h-3" />
+                  <span>{selectedHotel.city}</span>
+                </div>
+                <div className="flex items-center gap-2 mt-2">
+                  {renderStars(selectedHotel.rating)}
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-bold text-blue-600">${selectedHotel.pricePerNight}</p>
+                <p className="text-xs text-gray-500">per night</p>
+              </div>
             </div>
-            <div className="p-6">
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Check-in Date</label>
-                <input type="date" className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Check-out Date</label>
-                <input type="date" className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Guests</label>
-                <select className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option>1 Guest</option>
-                  <option>2 Guests</option>
-                  <option>3 Guests</option>
-                  <option>4 Guests</option>
-                </select>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                <div className="flex justify-between mb-2">
-                  <span className="text-gray-600">Price per night</span>
-                  <span className="font-semibold">${selectedHotel.pricePerNight}</span>
+          </div>
+
+          {/* Booking Form */}
+          <form onSubmit={(e) => { e.preventDefault(); handleBooking(); }}>
+            {/* Guest Information */}
+            <div className="mb-6">
+              <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <div className="w-1 h-5 bg-blue-500 rounded"></div>
+                Guest Information
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Full Name *
+                  </label>
+                  <div className="relative">
+                    <FiUser className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      value={formData.customer_name}
+                      onChange={(e) => setFormData({...formData, customer_name: e.target.value})}
+                      className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      placeholder="John Doe"
+                      required
+                    />
+                  </div>
                 </div>
-                <div className="flex justify-between mb-2">
-                  <span className="text-gray-600">Nights</span>
-                  <span className="font-semibold">1</span>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Email Address *
+                  </label>
+                  <div className="relative">
+                    <FiMail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({...formData, email: e.target.value})}
+                      className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      placeholder="john@example.com"
+                      required
+                    />
+                  </div>
                 </div>
-                <div className="border-t pt-2 mt-2">
-                  <div className="flex justify-between">
-                    <span className="font-semibold">Total</span>
-                    <span className="font-bold text-blue-600">${selectedHotel.pricePerNight}</span>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Phone Number *
+                  </label>
+                  <div className="relative">
+                    <FiPhone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="tel"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                      className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      placeholder="+1 234 567 890"
+                      required
+                    />
                   </div>
                 </div>
               </div>
-              <button className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
+            </div>
+
+            {/* Stay Details */}
+            <div className="mb-6">
+              <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <div className="w-1 h-5 bg-blue-500 rounded"></div>
+                Stay Details
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Check-in Date *
+                  </label>
+                  <div className="relative">
+                    <FiCalendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="date"
+                      value={formData.check_in}
+                      onChange={(e) => setFormData({...formData, check_in: e.target.value})}
+                      className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      min={new Date().toISOString().split('T')[0]}
+                      required
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Check-out Date *
+                  </label>
+                  <div className="relative">
+                    <FiCalendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="date"
+                      value={formData.check_out}
+                      onChange={(e) => setFormData({...formData, check_out: e.target.value})}
+                      className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      min={formData.check_in || new Date().toISOString().split('T')[0]}
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Rooms Section */}
+            <div className="mb-6">
+              <div className="flex justify-between items-center mb-3">
+                <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <div className="w-1 h-5 bg-blue-500 rounded"></div>
+                  Rooms & Guests
+                </h4>
+                <button
+                  type="button"
+                  onClick={() => setFormData({
+                    ...formData,
+                    rooms: [...formData.rooms, { room_type: "", guests: 1 }]
+                  })}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                >
+                  + Add Room
+                </button>
+              </div>
+              
+              {formData.rooms.map((room, index) => (
+                <div key={index} className="bg-gray-50 rounded-lg p-4 mb-3 border border-gray-200">
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-sm font-medium text-gray-700">Room {index + 1}</span>
+                    {formData.rooms.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updatedRooms = formData.rooms.filter((_, i) => i !== index);
+                          setFormData({...formData, rooms: updatedRooms});
+                        }}
+                        className="text-red-500 hover:text-red-600 text-sm"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Room Type *
+                      </label>
+                      <select
+                        value={room.room_type}
+                        onChange={(e) => {
+                          const updated = [...formData.rooms];
+                          updated[index].room_type = e.target.value;
+                          setFormData({...formData, rooms: updated});
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                        required
+                      >
+                        <option value="">Select Room Type</option>
+                        {selectedHotel.roomTypes?.map((r, i) => (
+                          <option key={i} value={r.type}>
+                            {r.type} - ${r.price}/night
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Number of Guests *
+                      </label>
+                      <div className="relative">
+                        <FiUsers className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                        <input
+                          type="number"
+                          value={room.guests}
+                          onChange={(e) => {
+                            const updated = [...formData.rooms];
+                            updated[index].guests = parseInt(e.target.value) || 1;
+                            setFormData({...formData, rooms: updated});
+                          }}
+                          min="1"
+                          max="4"
+                          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Price Breakdown */}
+            <div className="bg-gray-50 rounded-xl p-4 mb-6 border border-gray-200">
+              <h4 className="font-semibold text-gray-900 mb-3">Price Breakdown</h4>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Room rate per night</span>
+                  <span className="font-medium">${selectedHotel.pricePerNight}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Number of rooms</span>
+                  <span className="font-medium">{formData.rooms.length}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Number of nights</span>
+                  <span className="font-medium">
+                    {formData.check_in && formData.check_out ? 
+                      Math.max(1, Math.ceil((new Date(formData.check_out) - new Date(formData.check_in)) / (1000 * 60 * 60 * 24))) : 1
+                    }
+                  </span>
+                </div>
+                <div className="border-t border-gray-200 pt-2 mt-2">
+                  <div className="flex justify-between font-semibold">
+                    <span>Total Amount</span>
+                    <span className="text-2xl text-blue-600">
+  ${total.toFixed(2)}
+</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowBookingModal(false)}
+                className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all font-medium"
+              >
                 Confirm Booking
               </button>
             </div>
-          </div>
+          </form>
         </div>
-      )}
+      </div>
+    </div>
+  </div>
+)}
     </Layout>
   );
 }

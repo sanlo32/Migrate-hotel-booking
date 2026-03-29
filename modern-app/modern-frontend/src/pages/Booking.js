@@ -41,7 +41,20 @@ function Bookings() {
       setLoading(true);
       setError(null);
       const response = await axios.get("http://localhost:6001/bookings");
-      setBookings(response.data);
+
+// 🔥 ADD THIS TRANSFORMATION HERE
+const normalized = response.data.map(b => ({
+  ...b,
+  rooms: b.rooms || [
+    {
+      room_type: b.room_type,
+      guests: b.guests || 1,
+      price: b.price || 0
+    }
+  ]
+}));
+
+setBookings(normalized);
     } catch (err) {
       setError("Failed to load bookings. Please try again.");
       toast.error("Failed to load bookings");
@@ -57,13 +70,16 @@ function Bookings() {
   // Filter bookings
   const filteredBookings = bookings.filter(booking => {
     // Search filter
-    const matchesSearch = booking.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
-                         booking.email?.toLowerCase().includes(search.toLowerCase()) ||
-                         booking.room_type?.toLowerCase().includes(search.toLowerCase());
-    
+const matchesSearch =
+  booking.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
+  booking.email?.toLowerCase().includes(search.toLowerCase()) ||
+  booking.rooms?.some(r =>
+    r.room_type?.toLowerCase().includes(search.toLowerCase())
+  ) || false;   
     // Room type filter
-    const matchesRoomType = filterRoomType === "all" || booking.room_type === filterRoomType;
-    
+const matchesRoomType =
+  filterRoomType === "all" ||
+  booking.rooms?.some(r => r.room_type === filterRoomType);    
     // Date range filter
     let matchesDateRange = true;
     if (dateRange.start && booking.check_in) {
@@ -100,10 +116,10 @@ function Bookings() {
     const headers = ["Customer Name", "Room Type", "Check In", "Check Out", "Guests", "Total Price", "Email", "Phone"];
     const csvData = filteredBookings.map(booking => [
       booking.customer_name,
-      booking.room_type,
-      booking.check_in ? new Date(booking.check_in).toLocaleDateString() : "",
-      booking.check_out ? new Date(booking.check_out).toLocaleDateString() : "",
-      booking.guests || 1,
+      booking.rooms?.map(r => r.room_type).join("|"),
+      booking.check_in ? new Date(booking.check_in).toISOString().split("T")[0] : "",
+      booking.check_out ? new Date(booking.check_out).toISOString().split("T")[0] : "",
+      booking.rooms?.reduce((sum, r) => sum + (r.guests || 1), 0),
       booking.totalPrice ? `$${booking.totalPrice}` : "",
       booking.email || "",
       booking.phone || ""
@@ -126,8 +142,14 @@ function Bookings() {
   };
 
   // Get unique room types for filter
-  const roomTypes = ["all", ...new Set(bookings.map(b => b.room_type).filter(Boolean))];
-
+const roomTypes = [
+  "all",
+  ...Array.from(
+    new Set(
+      bookings.flatMap(b => b.rooms?.map(r => r.room_type) || [])
+    )
+  ).filter(Boolean)
+];
   // Clear all filters
   const clearFilters = () => {
     setSearch("");
@@ -343,19 +365,19 @@ function Bookings() {
                         </td>
                         <td className="px-6 py-4">
                           <span className="inline-flex px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
-                            {booking.room_type || "Standard"}
+                            {booking.rooms?.map(r => r.room_type).join(", ") || "Standard"}
                           </span>
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2 text-sm text-gray-700">
                             <FiCalendar className="w-4 h-4 text-gray-400" />
-                            {booking.check_in ? new Date(booking.check_in).toLocaleDateString() : "-"}
+                            {booking.check_in ? new Date(booking.check_in).toISOString().split("T")[0] : "-"}
                           </div>
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2 text-sm text-gray-700">
                             <FiCalendar className="w-4 h-4 text-gray-400" />
-                            {booking.check_out ? new Date(booking.check_out).toLocaleDateString() : "-"}
+                            {booking.check_out ? new Date(booking.check_out).toISOString().split("T")[0] : "-"}
                           </div>
                         </td>
                         <td className="px-6 py-4 text-center">
@@ -489,15 +511,23 @@ function Bookings() {
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-gray-500 uppercase">Room Type</label>
-                  <p className="text-lg font-semibold text-gray-900 mt-1">{selectedBooking.room_type || "Standard"}</p>
+                  <p className="text-lg font-semibold text-gray-900 mt-1">{selectedBooking.rooms?.map(r => r.room_type).join(", ") || "Standard"}</p>
+                </div>
+                <div className="mt-4">
+                  <label className="text-xs font-semibold text-gray-500 uppercase">Rooms</label>
+                  {selectedBooking.rooms?.map((room, i) => (
+                    <div key={i} className="text-sm text-gray-700 mt-1">
+                      🏨 {room.room_type} - ${room.price} - {room.guests || 1} guest(s)
+                    </div>
+                  ))}
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-gray-500 uppercase">Check In</label>
-                  <p className="text-gray-900 mt-1">{selectedBooking.check_in ? new Date(selectedBooking.check_in).toLocaleDateString() : "-"}</p>
+                  <p className="text-gray-900 mt-1">{selectedBooking.check_in ? new Date(selectedBooking.check_in).toISOString().split("T")[0] : "-"}</p>
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-gray-500 uppercase">Check Out</label>
-                  <p className="text-gray-900 mt-1">{selectedBooking.check_out ? new Date(selectedBooking.check_out).toLocaleDateString() : "-"}</p>
+                  <p className="text-gray-900 mt-1">{selectedBooking.check_out ? new Date(selectedBooking.check_out).toISOString().split("T")[0] : "-"}</p>
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-gray-500 uppercase">Number of Rooms</label>

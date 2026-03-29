@@ -1,57 +1,137 @@
-const mysql = require('mysql');
-const mongoose = require('mongoose');
+// const mongoose = require("mongoose");
+// const mysql = require("mysql2/promise");
 
-// 1. Connect to Modern MongoDB
-mongoose.connect('mongodb://localhost:27017/hotel_db')
-  .then(() => console.log("Connected to Modern MongoDB."));
+// async function migrateDB() {
+//   await mongoose.connect("mongodb://127.0.0.1:27017/modern_hotel");
 
-// Define the Modern Schema directly in the migration script
-const bookingSchema = new mongoose.Schema({
-  customer_name: String,
-  room_type: String,
-  check_in: Date,
-  check_out: Date,
-  special_requests: String // <-- Ready for Semantic Search
-});
-const Booking = mongoose.model('Booking', bookingSchema);
+//   const Booking = mongoose.model("Booking", {
+//     customer_name: String,
+//     rooms: Array,
+//     check_in: Date,
+//     check_out: Date
+//   });
 
-// 2. Connect to Legacy MySQL
-const db = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: '',
-  database: 'legacy_hotel_new'
-});
+//   const db = await mysql.createConnection({
+//     host: "localhost",
+//     user: "root",
+//     password: "",
+//     database: "legacy_hotel_new"
+//   });
 
-db.connect((err) => {
-  if (err) throw err;
-  console.log("Connected to Legacy MySQL.");
+//   const [rows] = await db.execute("SELECT * FROM bookings");
 
-  // 3. Fetch and Migrate Data
-  db.query("SELECT * FROM bookings", async (err, results) => {
-    if (err) throw err;
+//   for (let r of rows) {
+//     await Booking.create({
+//       customer_name: r.customer_name,
+//       rooms: [{ room_type: r.room_type }],
+//       check_in: r.check_in,
+//       check_out: r.check_out
+//     });
+//   }
 
-    console.log(`Found ${results.length} legacy records. Starting migration...`);
+//   console.log("DB Migration Done");
+// }
 
-    // Clear out the old modern database to ensure a clean slate
-    await Booking.deleteMany({});
+// migrateDB();
 
-    // Loop through and transfer every record
-    for (let i = 0; i < results.length; i++) {
-      const row = results[i];
 
-      const newBooking = new Booking({
-        customer_name: row.customer_name,
-        room_type: row.room_type,
-        check_in: row.check_in,
-        check_out: row.check_out,
-        special_requests: row.special_requests // <-- Moving the text data
-      });
+const mongoose = require("mongoose");
+const mysql = require("mysql2/promise");
 
-      await newBooking.save();
-    }
+// 🔹 Pricing logic
+function getRoomPrice(roomType, checkIn) {
+  const basePrices = {
+    Single: 100,
+    Double: 200,
+    Suite: 400
+  };
 
-    console.log("✅ DB-to-DB Migration Complete!");
-    process.exit();
+  let price = basePrices[roomType] || 150;
+
+  const month = new Date(checkIn).getMonth();
+  if (month === 11 || month === 0) {
+    price *= 1.2;
+  }
+
+  return price;
+}
+
+// 🔹 Nights calculation
+function calculateNights(checkIn, checkOut) {
+  const diff = new Date(checkOut) - new Date(checkIn);
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
+
+async function migrateDB() {
+  await mongoose.connect("mongodb://127.0.0.1:27017/modern_hotel");
+
+  const Booking = mongoose.model("Booking", {
+    customer_name: String,
+    rooms: Array,
+    check_in: Date,
+    check_out: Date,
+    totalPrice: Number
   });
+
+  const db = await mysql.createConnection({
+    host: "localhost",
+    user: "root",
+    password: "",
+    database: "legacy_hotel_new"
+  });
+
+  const [rows] = await db.execute("SELECT * FROM bookings");
+
+  const grouped = {};
+
+  // 🔹 Group bookings
+  rows.forEach(r => {
+    const key = `${r.customer_name}_${r.check_in}_${r.check_out}`;
+
+    ```
+if (!grouped[key]) {
+  grouped[key] = [];
+}
+
+grouped[key].push(r);
+```
+
+  });
+
+  for (let key in grouped) {
+    const bookings = grouped[key];
+
+    ```
+const customer = bookings[0].customer_name;
+const checkIn = bookings[0].check_in;
+const checkOut = bookings[0].check_out;
+
+const nights = calculateNights(checkIn, checkOut);
+
+const rooms = bookings.map(b => {
+  const price = getRoomPrice(b.room_type, checkIn);
+  return {
+    room_type: b.room_type,
+    price: price
+  };
 });
+
+const totalPrice = rooms.reduce((sum, r) => {
+  return sum + (r.price * nights);
+}, 0);
+
+await Booking.create({
+  customer_name: customer,
+  rooms: rooms,
+  check_in: checkIn,
+  check_out: checkOut,
+  totalPrice: totalPrice
+});
+```
+
+  }
+
+  console.log(" DB Migration Done");
+}
+
+migrateDB();

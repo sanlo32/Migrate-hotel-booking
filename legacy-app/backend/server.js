@@ -34,5 +34,31 @@ app.post("/bookings", (req, res) => {
     }
   );
 });
+app.put("/bookings/:id", (req, res) => {
+  const { id } = req.params;
+  const { customer_name, room_type, check_in, check_out } = req.body;
 
+  const sql = `
+    UPDATE bookings 
+    SET customer_name=?, room_type=?, check_in=?, check_out=?
+    WHERE id=?
+  `;
+
+  db.query(
+    sql,
+    [customer_name, room_type, check_in, check_out, id],
+    (err, result) => {
+      if (err) {
+        console.error("UPDATE ERROR:", err); // 👈 add this
+        return res.status(500).json({ error: err.message });
+      }
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ message: "Booking not found" });
+      }
+
+      res.json({ id, customer_name, room_type, check_in, check_out });
+    }
+  );
+});
 app.listen(5000, () => console.log("Legacy API running on 5000"));

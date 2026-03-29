@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import axios from "axios";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
 import { 
@@ -57,157 +58,44 @@ function Flights() {
   });
 
   // Sample flight data
-  const sampleFlights = [
-    {
-      id: 1,
-      airline: "Air India",
-      flightNumber: "AI-202",
-      from: "Mumbai (BOM)",
-      to: "Delhi (DEL)",
-      departureTime: "06:00",
-      arrivalTime: "08:00",
-      duration: "2h 00m",
-      price: 4500,
-      class: "economy",
-      amenities: ["wifi", "meal", "entertainment"],
-      stops: 0,
-      rating: 4.5
-    },
-    {
-      id: 2,
-      airline: "IndiGo",
-      flightNumber: "6E-401",
-      from: "Mumbai (BOM)",
-      to: "Delhi (DEL)",
-      departureTime: "08:30",
-      arrivalTime: "10:30",
-      duration: "2h 00m",
-      price: 3899,
-      class: "economy",
-      amenities: ["wifi"],
-      stops: 0,
-      rating: 4.3
-    },
-    {
-      id: 3,
-      airline: "SpiceJet",
-      flightNumber: "SG-101",
-      from: "Mumbai (BOM)",
-      to: "Delhi (DEL)",
-      departureTime: "12:15",
-      arrivalTime: "14:30",
-      duration: "2h 15m",
-      price: 3599,
-      class: "economy",
-      amenities: ["meal"],
-      stops: 0,
-      rating: 4.1
-    },
-    {
-      id: 4,
-      airline: "Vistara",
-      flightNumber: "UK-955",
-      from: "Mumbai (BOM)",
-      to: "Delhi (DEL)",
-      departureTime: "15:45",
-      arrivalTime: "17:45",
-      duration: "2h 00m",
-      price: 5299,
-      class: "economy",
-      amenities: ["wifi", "meal", "entertainment"],
-      stops: 0,
-      rating: 4.7
-    },
-    {
-      id: 5,
-      airline: "Air India",
-      flightNumber: "AI-678",
-      from: "Mumbai (BOM)",
-      to: "Delhi (DEL)",
-      departureTime: "18:20",
-      arrivalTime: "20:20",
-      duration: "2h 00m",
-      price: 4899,
-      class: "economy",
-      amenities: ["wifi", "meal", "entertainment"],
-      stops: 0,
-      rating: 4.5
-    },
-    {
-      id: 6,
-      airline: "IndiGo",
-      flightNumber: "6E-203",
-      from: "Mumbai (BOM)",
-      to: "Delhi (DEL)",
-      departureTime: "21:00",
-      arrivalTime: "23:00",
-      duration: "2h 00m",
-      price: 4199,
-      class: "economy",
-      amenities: ["wifi"],
-      stops: 0,
-      rating: 4.3
-    },
-    {
-      id: 7,
-      airline: "Emirates",
-      flightNumber: "EK-501",
-      from: "Mumbai (BOM)",
-      to: "Delhi (DEL)",
-      departureTime: "04:30",
-      arrivalTime: "06:45",
-      duration: "2h 15m",
-      price: 15999,
-      class: "business",
-      amenities: ["wifi", "meal", "entertainment", "lounge"],
-      stops: 0,
-      rating: 4.9
-    },
-    {
-      id: 8,
-      airline: "Qatar Airways",
-      flightNumber: "QR-589",
-      from: "Mumbai (BOM)",
-      to: "Delhi (DEL)",
-      departureTime: "09:45",
-      arrivalTime: "12:00",
-      duration: "2h 15m",
-      price: 18499,
-      class: "business",
-      amenities: ["wifi", "meal", "entertainment", "lounge", "bed"],
-      stops: 0,
-      rating: 4.8
-    }
-  ];
-
-  const popularCities = [
-    { code: "BOM", name: "Mumbai", country: "India" },
-    { code: "DEL", name: "Delhi", country: "India" },
-    { code: "BLR", name: "Bangalore", country: "India" },
-    { code: "MAA", name: "Chennai", country: "India" },
-    { code: "CCU", name: "Kolkata", country: "India" },
-    { code: "HYD", name: "Hyderabad", country: "India" },
-    { code: "DXB", name: "Dubai", country: "UAE" },
-    { code: "SIN", name: "Singapore", country: "Singapore" },
-    { code: "LHR", name: "London", country: "UK" },
-    { code: "JFK", name: "New York", country: "USA" }
-  ];
-
-  const handleSearch = () => {
-    if (!searchParams.from || !searchParams.to || !searchParams.departDate) {
-      toast.error("Please fill in all required fields");
-      return;
-    }
-
+ useEffect(() => {
+  fetchFlights();
+}, []);
+const fetchFlights = async () => {
+  try {
     setLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setFlights(sampleFlights);
-      setFilteredFlights(sampleFlights);
-      setLoading(false);
-      toast.success(`Found ${sampleFlights.length} flights`);
-    }, 1500);
-  };
+    const res = await axios.get("http://localhost:8000/flights");
+    setFlights(res.data);
+    setFilteredFlights(res.data);
+  } catch (err) {
+    console.error(err);
+    toast.error("Failed to load flights");
+  } finally {
+    setLoading(false);
+  }
+};
+const handleSearch = async () => {
+  if (!searchParams.from || !searchParams.to || !searchParams.departDate) {
+    toast.error("Please fill in all required fields");
+    return;
+  }
+
+  try {
+    setLoading(true);
+
+    const res = await axios.get("http://localhost:8000/flights");
+
+    setFlights(res.data);
+    setFilteredFlights(res.data);
+
+    toast.success(`Found ${res.data.length} flights`);
+  } catch (err) {
+    console.error(err);
+    toast.error("Failed to search flights");
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleFilter = () => {
     let filtered = [...flights];
@@ -308,7 +196,14 @@ function Flights() {
     const airlines = ["all", ...new Set(flights.map(f => f.airline))];
     return airlines;
   };
-
+const popularCities = [
+  { code: "BOM", name: "Mumbai" },
+  { code: "DEL", name: "Delhi" },
+  { code: "BLR", name: "Bangalore" },
+  { code: "MAA", name: "Chennai" },
+  { code: "HYD", name: "Hyderabad" },
+  { code: "CCU", name: "Kolkata" }
+];
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <Sidebar />
