@@ -20,42 +20,18 @@
 
 
 
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
 const bookingSchema = new mongoose.Schema({
-  customer_name: {
-    type: String,
-    required: true
-  },
+  customer_name: { type: String, required: true },
+  rooms: [{
+    room_type: String,
+    price: Number
+  }],
+  check_in: { type: Date, required: true },
+  check_out: { type: Date, required: true },
+  totalPrice: Number,
+  special_requests: String
+});
 
-  type: {
-    type: String,
-    enum: ["hotel", "flight"],
-    default: "hotel"
-  },
-
-  hotel_name: String,
-  flight_number: String,
-
-  rooms: [
-    {
-      room_type: String,
-      price: Number,
-      guests: {
-        type: Number,
-        default: 1
-      }
-    }
-  ],
-
-  check_in: Date,
-  check_out: Date,
-
-  totalPrice: {
-    type: Number,
-    default: 0
-  }
-
-}, { timestamps: true });
-
-module.exports = mongoose.model("Booking", bookingSchema);
+module.exports = mongoose.model('Booking', bookingSchema);
