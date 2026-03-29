@@ -1,40 +1,3 @@
-// const mongoose = require("mongoose");
-// const mysql = require("mysql2/promise");
-
-// async function migrateDB() {
-//   await mongoose.connect("mongodb://127.0.0.1:27017/modern_hotel");
-
-//   const Booking = mongoose.model("Booking", {
-//     customer_name: String,
-//     rooms: Array,
-//     check_in: Date,
-//     check_out: Date
-//   });
-
-//   const db = await mysql.createConnection({
-//     host: "localhost",
-//     user: "root",
-//     password: "",
-//     database: "legacy_hotel_new"
-//   });
-
-//   const [rows] = await db.execute("SELECT * FROM bookings");
-
-//   for (let r of rows) {
-//     await Booking.create({
-//       customer_name: r.customer_name,
-//       rooms: [{ room_type: r.room_type }],
-//       check_in: r.check_in,
-//       check_out: r.check_out
-//     });
-//   }
-
-//   console.log("DB Migration Done");
-// }
-
-// migrateDB();
-
-
 const mongoose = require("mongoose");
 const mysql = require("mysql2/promise");
 
@@ -49,7 +12,7 @@ function getRoomPrice(roomType, checkIn) {
   let price = basePrices[roomType] || 150;
 
   const month = new Date(checkIn).getMonth();
-  if (month === 11 || month === 0) {
+  if (month === 11 || month === 0) { // Dec or Jan
     price *= 1.2;
   }
 
@@ -63,14 +26,16 @@ function calculateNights(checkIn, checkOut) {
 }
 
 async function migrateDB() {
-  await mongoose.connect("mongodb://127.0.0.1:27017/modern_hotel");
+  // 🔗 Ensure the DB name matches your server.js (hotel_db)
+  await mongoose.connect("mongodb://127.0.0.1:27017/hotel_db");
 
   const Booking = mongoose.model("Booking", {
     customer_name: String,
     rooms: Array,
     check_in: Date,
     check_out: Date,
-    totalPrice: Number
+    totalPrice: Number,
+    special_requests: String // 👈 ADDED: Critical for Semantic Search
   });
 
   const db = await mysql.createConnection({
@@ -80,58 +45,60 @@ async function migrateDB() {
     database: "legacy_hotel_new"
   });
 
+  console.log("Fetching data from MySQL...");
   const [rows] = await db.execute("SELECT * FROM bookings");
 
   const grouped = {};
 
-  // 🔹 Group bookings
+  // 🔹 Group bookings by customer and stay dates
   rows.forEach(r => {
     const key = `${r.customer_name}_${r.check_in}_${r.check_out}`;
-
-    ```
-if (!grouped[key]) {
-  grouped[key] = [];
-}
-
-grouped[key].push(r);
-```
-
+    if (!grouped[key]) {
+      grouped[key] = [];
+    }
+    grouped[key].push(r);
   });
+
+  console.log(`Migrating ${Object.keys(grouped).length} unique bookings...`);
 
   for (let key in grouped) {
     const bookings = grouped[key];
+    const customer = bookings[0].customer_name;
+    const checkIn = bookings[0].check_in;
+    const checkOut = bookings[0].check_out;
 
-    ```
-const customer = bookings[0].customer_name;
-const checkIn = bookings[0].check_in;
-const checkOut = bookings[0].check_out;
+    // Combine special requests from all rooms in the group
+    const combinedRequests = bookings
+      .map(b => b.special_requests)
+      .filter(req => req) // Remove empty/null notes
+      .join(". ");
 
-const nights = calculateNights(checkIn, checkOut);
+    const nights = calculateNights(checkIn, checkOut);
 
-const rooms = bookings.map(b => {
-  const price = getRoomPrice(b.room_type, checkIn);
-  return {
-    room_type: b.room_type,
-    price: price
-  };
-});
+    const rooms = bookings.map(b => {
+      const price = getRoomPrice(b.room_type, checkIn);
+      return {
+        room_type: b.room_type,
+        price: price
+      };
+    });
 
-const totalPrice = rooms.reduce((sum, r) => {
-  return sum + (r.price * nights);
-}, 0);
+    const totalPrice = rooms.reduce((sum, r) => {
+      return sum + (r.price * nights);
+    }, 0);
 
-await Booking.create({
-  customer_name: customer,
-  rooms: rooms,
-  check_in: checkIn,
-  check_out: checkOut,
-  totalPrice: totalPrice
-});
-```
-
+    await Booking.create({
+      customer_name: customer,
+      rooms: rooms,
+      check_in: checkIn,
+      check_out: checkOut,
+      totalPrice: totalPrice,
+      special_requests: combinedRequests // 👈 ADDED: Now mapped for AI indexing
+    });
   }
 
-  console.log(" DB Migration Done");
+  console.log("✅ DB Migration Done - Data ready for AI processing.");
+  process.exit();
 }
 
 migrateDB();

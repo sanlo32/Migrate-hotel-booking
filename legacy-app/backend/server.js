@@ -13,43 +13,53 @@ const db = mysql.createConnection({
   database: "legacy_hotel_new"
 });
 
-// Get all bookings
+// --- 1. Get all bookings ---
 app.get("/bookings", (req, res) => {
   db.query("SELECT * FROM bookings", (err, result) => {
-    if (err) return res.status(500).send(err);
+    if (err) {
+      console.error("FETCH ERROR:", err);
+      return res.status(500).json({ error: err.message });
+    }
     res.json(result);
   });
 });
 
-// Create booking
+// --- 2. Create booking (Updated with special_requests) ---
 app.post("/bookings", (req, res) => {
-  const { customer_name, room_type, check_in, check_out } = req.body;
+  const { customer_name, room_type, check_in, check_out, special_requests } = req.body;
+
+  const sql = "INSERT INTO bookings (customer_name, room_type, check_in, check_out, special_requests) VALUES (?, ?, ?, ?, ?)";
 
   db.query(
-    "INSERT INTO bookings (customer_name, room_type, check_in, check_out) VALUES (?, ?, ?, ?)",
-    [customer_name, room_type, check_in, check_out],
+    sql,
+    [customer_name, room_type, check_in, check_out, special_requests || ""],
     (err, result) => {
-      if (err) return res.status(500).send(err);
+      if (err) {
+        console.error("INSERT ERROR:", err);
+        return res.status(500).json({ error: err.message });
+      }
       res.json({ id: result.insertId });
     }
   );
 });
+
+// --- 3. Update booking (Updated with special_requests) ---
 app.put("/bookings/:id", (req, res) => {
   const { id } = req.params;
-  const { customer_name, room_type, check_in, check_out } = req.body;
+  const { customer_name, room_type, check_in, check_out, special_requests } = req.body;
 
   const sql = `
     UPDATE bookings 
-    SET customer_name=?, room_type=?, check_in=?, check_out=?
+    SET customer_name=?, room_type=?, check_in=?, check_out=?, special_requests=?
     WHERE id=?
   `;
 
   db.query(
     sql,
-    [customer_name, room_type, check_in, check_out, id],
+    [customer_name, room_type, check_in, check_out, special_requests || "", id],
     (err, result) => {
       if (err) {
-        console.error("UPDATE ERROR:", err); // 👈 add this
+        console.error("UPDATE ERROR:", err);
         return res.status(500).json({ error: err.message });
       }
 
@@ -57,8 +67,9 @@ app.put("/bookings/:id", (req, res) => {
         return res.status(404).json({ message: "Booking not found" });
       }
 
-      res.json({ id, customer_name, room_type, check_in, check_out });
+      res.json({ id, customer_name, room_type, check_in, check_out, special_requests });
     }
   );
 });
-app.listen(5000, () => console.log("Legacy API running on 5000"));
+
+app.listen(5000, () => console.log("🚀 Legacy API running on http://localhost:5000"));

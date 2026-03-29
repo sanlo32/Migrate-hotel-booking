@@ -1,36 +1,49 @@
-import sys
-import pandas as pd
 import joblib
-import warnings
+import json
+import pandas as pd
+from datetime import datetime
 
-# Suppress minor warnings for a clean Node.js output
-warnings.filterwarnings("ignore")
 
-# 1. Catch the arguments passed from Node.js
-try:
-    target_year = int(sys.argv[1])
-    target_month = int(sys.argv[2])
-    target_room = sys.argv[3]
-except IndexError:
-    print("Error: Please provide year, month, and room_type.")
-    sys.exit(1)
+def generate_forecast():
+    try:
+        model = joblib.load("production_demand_model.joblib")
+        current_year = datetime.now().year
+        room_types = ["Single", "Double", "Suite"]
+        months_labels = [
+            "Jan",
+            "Feb",
+            "Mar",
+            "Apr",
+            "May",
+            "Jun",
+            "Jul",
+            "Aug",
+            "Sep",
+            "Oct",
+            "Nov",
+            "Dec",
+        ]
 
-# 2. Load the optimized "brain" we trained earlier
-try:
-    model = joblib.load("production_demand_model.joblib")
-except FileNotFoundError:
-    print("Error: Model file not found. Please train the model first.")
-    sys.exit(1)
+        forecast_results = []
 
-# 3. Format the input exactly how the model expects it
-input_data = pd.DataFrame(
-    input_data=pd.DataFrame(
-        {"year": [target_year], "month": [target_month], "room_type": [target_room]}
-    )
-)
+        for m in range(1, 13):
+            total_month_demand = 0
+            for rt in room_types:
+                # 👈 Create a feature row that matches the training X
+                input_df = pd.DataFrame(
+                    [[current_year, m, rt]], columns=["year", "month", "room_type"]
+                )
+                prediction = model.predict(input_df)[0]
+                total_month_demand += max(0, prediction)
 
-# 4. Generate the highly accurate prediction
-prediction = model.predict(input_data)
+            forecast_results.append(
+                {"month": months_labels[m - 1], "demand": int(total_month_demand)}
+            )
 
-# Print strictly the integer so Node.js can parse it directly
-print(int(prediction[0]))
+        return json.dumps(forecast_results)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+if __name__ == "__main__":
+    print(generate_forecast())
